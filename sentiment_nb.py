@@ -95,3 +95,8 @@ def get_confusion_matrix(classifier, data, text_col):
     confusion_mat = confusion_matrix(true_sentiment, predictions, labels=['positive', 'neutral', 'negative'])
     return confusion_mat
 
+# Function to predict sentiment for a single text input
+def predict_single_sentiment(classifier, input_text):
+    preprocessed_text = remove_plural_preprocessor(input_text)
+    prediction = classifier.predict([preprocessed_text])
+    return prediction[0]
