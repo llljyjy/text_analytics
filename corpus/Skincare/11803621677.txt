@@ -1,0 +1,1 @@
+It definitely worked but a lot slower than i wanted. I think that the % was too low because when i went up to 1.0% it was way better. Its decent

@@ -1,0 +1,1 @@
+This is not hydrating at all. The stick size is nice, but the actual formula does nothing. Not great
