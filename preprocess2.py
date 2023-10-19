@@ -1,5 +1,6 @@
 import nltk
 import re
+import pandas as pd
 
 stop_list = nltk.corpus.stopwords.words('english')
 
