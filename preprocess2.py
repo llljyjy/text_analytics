@@ -37,8 +37,6 @@ def corpus2docs(corpus, stem = False):
     docs4 = [[w for w in doc if w not in stop_list] for doc in docs3]
     docs5 = [[word if word != "NaN" else "" for word in doc] for doc in docs4]
 
-    return docs5
-
 def docs2vecs(docs, dictionary):
     # docs is a list of documents returned by corpus2docs.
     # dictionary is a gensim.corpora.Dictionary object.
