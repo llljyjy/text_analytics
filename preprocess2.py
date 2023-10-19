@@ -24,25 +24,18 @@ def load_corpus(dir):
     corpus = nltk.corpus.PlaintextCorpusReader(dir, '.+\.txt')
     return corpus
 
-def corpus2docs(corpus, stem = False, replace_nan=True):
+def corpus2docs(corpus, stem = False):
     # corpus is a object returned by load_corpus that represents a corpus.
     fids = corpus.fileids()
-
     docs1 = []
     for fid in fids:
         doc_raw = corpus.raw(fid)
         doc = nltk.word_tokenize(doc_raw)
-        if replace_nan:
-            doc = [word if not pd.isna(word) else "" for word in doc]
         docs1.append(doc)
     docs2 = [[w.lower() for w in doc] for doc in docs1]
     docs3 = [[w for w in doc if re.search('^[a-z]+$', w)] for doc in docs2]
     docs4 = [[w for w in doc if w not in stop_list] for doc in docs3]
-    if stem:
-        docs5 = [[stemmer.stem(w) for w in doc] for doc in docs4]
-    else:
-        docs5 = docs4
-    return docs5
+    docs5 = [[word if word != "NaN" else "" for word in doc] for doc in docs4]
 
 def docs2vecs(docs, dictionary):
     # docs is a list of documents returned by corpus2docs.
