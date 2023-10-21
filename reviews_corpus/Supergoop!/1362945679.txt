@@ -1,0 +1,1 @@
+Not a fan of this particular formula. When applying it on face it gets flaky towards the end nan
