@@ -4,6 +4,8 @@ import pandas as pd
 
 stop_list = nltk.corpus.stopwords.words('english')
 
+stop_list.append("nan")
+
 #extend the stop list
 def extend_stop_list_from_df(latest_review, secondary_category):
     if secondary_category not in latest_review.columns:
@@ -34,24 +36,7 @@ def corpus2docs(corpus, stem=False):
         docs1.append(doc)
     docs2 = [[w.lower() for w in doc] for doc in docs1]
     docs3 = [[w for w in doc if re.search('^[a-z]+$', w)] for doc in docs2]
-
-    # Initialize Laplace smoothing parameters
-    smoothing_parameter = 1  # Adjust as needed
-
-    # Extend the stop_list with the words from column_values
-    docs4 = []
-    for doc in docs3:
-        smoothed_doc = []
-        for word in doc:
-            if word not in stop_list:
-                smoothed_doc.append(word)  # Exclude stopwords
-                # Apply Laplace smoothing here:
-                word_count = doc.count(word) + smoothing_parameter
-                total_word_count = len(doc) + (smoothing_parameter * len(set(doc)))
-                word_probability = word_count / total_word_count
-                # Replace the word with its Laplace-smoothed form
-                smoothed_doc.extend([word] * int(round(word_probability * 1000)))  # You can adjust the multiplier
-        docs4.append(smoothed_doc)
+    docs4 = [[w for w in doc if w not in stop_list] for doc in docs3]
     docs5 = [[word if word != "nan" else "" for word in doc] for doc in docs4]
     return docs5
 
