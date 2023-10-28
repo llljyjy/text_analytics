@@ -1,0 +1,1 @@
+get half product since send half empty nan

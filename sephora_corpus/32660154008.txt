@@ -1,0 +1,1 @@
+splotchy color indicator letting know application going splotchy

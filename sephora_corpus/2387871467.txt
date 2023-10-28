@@ -1,0 +1,1 @@
+product seperated smell bad working returning nan
