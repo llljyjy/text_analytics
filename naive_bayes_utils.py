@@ -17,6 +17,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from wordcloud import WordCloud, STOPWORDS
 
 
 # different types of preprocessor to understand the impact of different text preprocessing techniques
@@ -25,11 +26,19 @@ import seaborn as sns
 def lowercase_preprocessor(text):
     return text.lower()
 
-# try out with common english stopwords
+# try out with only common english stopwords
 def stopword_preprocessor(text):
     stop_words = CountVectorizer(stop_words='english').get_stop_words()
     words = text.split()
     filtered_words = [word for word in words if word.lower() not in stop_words]
+    return ' '.join(filtered_words)
+
+# try out with both custom and common english stopwords
+def customized_stopword_preprocessor(text):
+    custom_stopwords = {'skin','product','face','cream','serum','moisturizer','makeup','eye','sunscreen','eyes','products','s'}
+    all_stopwords = STOPWORDS.union(custom_stopwords)
+    words = text.split()
+    filtered_words = [word for word in words if word.lower() not in all_stopwords]
     return ' '.join(filtered_words)
 
 # experiment on converting text back to its original format 
@@ -45,23 +54,6 @@ def remove_plural_preprocessor(text):
     words = text.split()
     singular_words = [p.singular_noun(word) if p.singular_noun(word) else word for word in words]
     return ' '.join(singular_words)
-
-def customized_stopword_preprocessor(text):
-    # stopwords = set([
-    #     'mist', 'sunscreen', 'toner', 'moisturizer', 'skincare','blush', 'cream', 'product', 'skin',
-    #     'remover', 'essence', 'foundation', 'serum', 'mask', 'cleanser', 'lipstick','makeup', 
-    # ])
-
-    stopwords = set([
-        'mist', 'sunscreen', 'toner', 'moisturizer', 'skincare','blush', 'cream', 'product',
-        'remover', 'essence', 'foundation', 'serum', 'mask', 'cleanser', 'lipstick','makeup',
-        'skin','I','my','and','so','this','it','s','that','face','the','or','in','on','for','with',
-        'also','a','is','me','as','you','which','to','of'
-    ])
-    
-    words = text.split()
-    filtered_words = [word for word in words if word.lower() not in stopwords]
-    return ' '.join(filtered_words)
 
 
 # naive bayes classifer pipeline to finetune preprocessors, define target variables, and input features 
@@ -131,7 +123,7 @@ class NaiveBayesClassifier:
 
         # If using additional features
         if use_additional_features:
-            additional_features = self.data[['helpfulness', 'price_usd', 'length']]
+            additional_features = self.data[['helpfulness', 'price_usd', 'length']]  
             if vectorizer_type != 'word2vec':
                 vectorizer = CountVectorizer() if vectorizer_type == 'count' else TfidfVectorizer()
                 X = vectorizer.fit_transform(X).toarray()
