@@ -1,0 +1,309 @@
+# naive_bayes_utils.py
+
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import precision_score, recall_score, f1_score
+from gensim.models import Word2Vec
+import re
+import inflect
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+import numpy as np
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+
+# different types of preprocessor to understand the impact of different text preprocessing techniques
+
+# most basic preprocessor, only converting all to lower cases
+def lowercase_preprocessor(text):
+    return text.lower()
+
+# try out with common english stopwords
+def stopword_preprocessor(text):
+    stop_words = CountVectorizer(stop_words='english').get_stop_words()
+    words = text.split()
+    filtered_words = [word for word in words if word.lower() not in stop_words]
+    return ' '.join(filtered_words)
+
+# experiment on converting text back to its original format 
+def lemmatizer_preprocessor(text):
+    lemmatizer = WordNetLemmatizer()
+    words = text.split()
+    lemmatized_words = [lemmatizer.lemmatize(word) for word in words]
+    return ' '.join(lemmatized_words)
+
+# only to convert plural words back to its single form 
+p = inflect.engine()
+def remove_plural_preprocessor(text):
+    words = text.split()
+    singular_words = [p.singular_noun(word) if p.singular_noun(word) else word for word in words]
+    return ' '.join(singular_words)
+
+def customized_stopword_preprocessor(text):
+    # stopwords = set([
+    #     'mist', 'sunscreen', 'toner', 'moisturizer', 'skincare','blush', 'cream', 'product', 'skin',
+    #     'remover', 'essence', 'foundation', 'serum', 'mask', 'cleanser', 'lipstick','makeup', 
+    # ])
+
+    stopwords = set([
+        'mist', 'sunscreen', 'toner', 'moisturizer', 'skincare','blush', 'cream', 'product',
+        'remover', 'essence', 'foundation', 'serum', 'mask', 'cleanser', 'lipstick','makeup',
+        'skin','I','my','and','so','this','it','s','that','face','the','or','in','on','for','with',
+        'also','a','is','me','as','you','which','to','of'
+    ])
+    
+    words = text.split()
+    filtered_words = [word for word in words if word.lower() not in stopwords]
+    return ' '.join(filtered_words)
+
+
+# naive bayes classifer pipeline to finetune preprocessors, define target variables, and input features 
+# preprocessors -> vectorizer -> train -> evaluate
+class NaiveBayesClassifier:
+
+    def __init__(self, data, text_col, preprocessors=None):
+        self.data = data
+        self.text_col = text_col
+        self.classifier = None
+        self.preprocessors_map = {
+            'lowercase': lowercase_preprocessor,
+            'stopword': stopword_preprocessor,
+            'lemmatizer': lemmatizer_preprocessor,
+            'remove_plural': remove_plural_preprocessor,
+            'custom_stopword': customized_stopword_preprocessor
+        }
+        
+        if preprocessors is None:
+            self.preprocessors = []
+        else:
+            self.preprocessors = preprocessors
+
+    def apply_preprocessors(self, text):
+        for preprocessor_name in self.preprocessors:
+            func = self.preprocessors_map.get(preprocessor_name)
+            if func:
+                text = func(text)
+        return text
+
+    # to explore on different types of Vectorizer: count, tfidf, word2vec
+    def build_pipeline(self, vectorizer_type):
+        if vectorizer_type == 'count':
+            vectorizer = CountVectorizer()
+        elif vectorizer_type == 'tfidf':
+            vectorizer = TfidfVectorizer()
+        elif vectorizer_type == 'word2vec':
+            vectorizer = None  # Word2Vec do not go through pipeline
+        else:
+            raise ValueError(f"Unknown vectorizer type: {vectorizer_type}")
+        
+        classifier = MultinomialNB()
+        
+        if vectorizer_type == 'word2vec':
+            return classifier # Word2Vec do not go through pipeline
+        else:
+            return Pipeline([
+                ('vectorizer', vectorizer),
+                ('classifier', classifier)
+            ])
+
+    def train_word2vec(self):
+        w2v_model = Word2Vec(self.data['reviews_processed'].str.split(), vector_size=100, window=5, min_count=1, workers=4)
+        w2v_model.train(self.data['reviews_processed'].tolist(), total_examples=w2v_model.corpus_count, epochs=10)
+        # Average the word vectors for each sentence
+        self.data['w2v'] = self.data['reviews_processed'].apply(lambda x: np.mean([w2v_model.wv[word] for word in x.split() if word in w2v_model.wv.index_to_key], axis=0))
+        return list(self.data['w2v'].values)
+
+    def train(self, vectorizer_type='count', use_additional_features=False):
+        # Preprocessing
+        self.data['reviews_processed'] = self.data[self.text_col].apply(self.apply_preprocessors)
+
+        if vectorizer_type == 'word2vec':
+            X = self.train_word2vec()
+        else:
+            X = self.data['reviews_processed']
+
+        # If using additional features
+        if use_additional_features:
+            additional_features = self.data[['helpfulness', 'price_usd', 'length']]
+            if vectorizer_type != 'word2vec':
+                vectorizer = CountVectorizer() if vectorizer_type == 'count' else TfidfVectorizer()
+                X = vectorizer.fit_transform(X).toarray()
+            # Concatenate the vectorized text data with the additional features
+            X = np.hstack((X, additional_features))
+
+        X_train, X_test, y_train, y_test = train_test_split(X, self.data['true_sentiment'], test_size=0.4, random_state=2023)
+    
+        if vectorizer_type != 'word2vec':
+            pipeline = self.build_pipeline(vectorizer_type)
+            pipeline.fit(X_train, y_train)
+            self.classifier = pipeline
+
+        else:
+            # If using Word2Vec, train the classifier directly
+            self.classifier = MultinomialNB()
+            self.classifier.fit(X_train, y_train)
+
+        train_metrics = self.evaluate_classifier(self.classifier, X_train, y_train)
+        test_metrics = self.evaluate_classifier(self.classifier, X_test, y_test)
+
+        return train_metrics, test_metrics
+
+
+    def evaluate_classifier(self, classifier, X, y):
+        predictions = classifier.predict(X)
+        
+        accuracy = accuracy_score(y, predictions)
+        unique_labels = np.unique(np.concatenate((y, predictions)))
+        confusion_mat = confusion_matrix(y, predictions, labels=unique_labels)
+
+        precision = precision_score(y, predictions, average='weighted', labels=unique_labels, zero_division=0)
+        recall = recall_score(y, predictions, average='weighted', labels=unique_labels)
+        f1 = f1_score(y, predictions, average='weighted', labels=unique_labels)
+
+        # Calculate F2 score using its formula: F2 = (1 + 2^2) * (precision * recall) / ((2^2 * precision) + recall)
+        beta = 2
+        f2 = (1 + beta**2) * (precision * recall) / ((beta**2 * precision) + recall)
+
+        metrics = {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'f2': f2,
+        'confusion_mat': confusion_mat
+        }
+        
+        return metrics
+
+    def display_results(self, metrics):
+        for metric, value in metrics.items():
+            if metric != 'confusion_mat':
+                if isinstance(value, np.ndarray):
+                    print(f"{metric}:\n{value}")
+                else:
+                    print(f"{metric}: {value:.5f}")
+
+            
+    
+
+    
+class NaiveBayesVisualization:
+    
+    def __init__(self, classifier):
+        self.classifier = classifier
+        self.data = classifier.data
+        self.validator = Validator(classifier) 
+
+    def plot_individual_confusion_matrices(self, X, y, classes=['positive', 'negative', 'neutral']):
+        # Check for the unique classes in y and only keep those present in the classes list
+        unique_classes = np.unique(y)
+        classes = [cls for cls in classes if cls in unique_classes]
+
+        # Get the confusion matrix using evaluate_classifier
+        _, full_confusion = self.classifier.evaluate_classifier(self.classifier.classifier, X, y)
+
+        for class_label in classes:
+            # Extract binary confusion matrix for the specific class
+            true_pos = full_confusion[classes.index(class_label), classes.index(class_label)]
+            false_pos = sum(full_confusion[:, classes.index(class_label)]) - true_pos
+            false_neg = sum(full_confusion[classes.index(class_label), :]) - true_pos
+            true_neg = np.sum(full_confusion) - true_pos - false_pos - false_neg
+
+            # Construct the binary confusion matrix for this class
+            binary_confusion = np.array([
+                [true_pos, false_pos],
+                [false_neg, true_neg]
+            ])
+
+            # Plot
+            self.plot_confusion_matrix(binary_confusion, classes=[class_label, 'not_' + class_label])
+
+    def plot_confusion_matrix(self, matrix, classes, cmap=plt.cm.Blues):
+        plt.figure(figsize=(5, 3))
+        sns.heatmap(matrix, annot=True, fmt='d', cmap=cmap,
+                    xticklabels=classes,
+                    yticklabels=classes)
+        plt.ylabel('Actual')
+        plt.xlabel('Predicted')
+        plt.show()
+
+
+    def display_incorrect_samples(self, n_samples_per_sentiment=3):
+        self.data['prediction'] = self.validator.predict_batch(self.data['reviews_processed'].tolist())
+        incorrect_samples = self.data[self.data['true_sentiment'] != self.data['prediction']]
+
+        for sentiment in ['positive', 'negative', 'neutral']:
+            # Check if the sentiment exists in the true sentiments
+            if sentiment in self.data['true_sentiment'].unique():
+                incorrect_of_sentiment = incorrect_samples[incorrect_samples['true_sentiment'] == sentiment].head(n_samples_per_sentiment)
+                for _, row in incorrect_of_sentiment.iterrows():
+                    print(f"Review: {row['review_text']}")
+                    print(f"Review Procrssed: {row['reviews_processed']}")
+                    print(f"Actual Sentiment: {row['true_sentiment']}")
+                    print(f"Predicted Sentiment: {row['prediction']}\n")
+
+    def show_top_features(self, n_features=10):
+        output_str = "x"
+
+        if 'count' in self.classifier.classifier.named_steps or 'tfidf' in self.classifier.classifier.named_steps:
+            if 'count' in self.classifier.classifier.named_steps:
+                vectorizer = self.classifier.classifier.named_steps['count']
+            else:
+                vectorizer = self.classifier.classifier.named_steps['tfidf']
+
+            feature_names = vectorizer.get_feature_names_out()
+            classifier_coef = self.classifier.classifier.named_steps['classifier'].coef_
+
+            for class_index, class_label in enumerate(self.classifier.classifier.named_steps['classifier'].classes_):
+                top_indices = classifier_coef[class_index].argsort()[-n_features:][::-1]
+                top_features = [feature_names[i] for i in top_indices]
+                output_str += f"Top features for class {class_label}:\n"
+                output_str += ", ".join(top_features)
+                output_str += "\n\n"
+
+        return output_str
+
+
+
+
+
+class Validator:
+    
+    def __init__(self, classifier):
+        self.classifier = classifier
+
+    def preprocess_text(self, text):
+        # Apply all preprocessors in sequence to the provided text
+        return self.classifier.apply_preprocessors(text)
+
+    def predict_single(self, text):
+        processed_text = self.preprocess_text(text)
+        return self._predict(processed_text)
+
+    def predict_batch(self, texts):
+        processed_texts = [self.preprocess_text(text) for text in texts]
+        return self._predict(processed_texts)
+
+    def _predict(self, processed_texts):
+        if 'w2v' in self.classifier.data.columns:
+            w2v_model = Word2Vec.load("word2vec.model")
+            if isinstance(processed_texts, str):
+                vectors = np.mean([w2v_model.wv[word] for word in processed_texts.split() if word in w2v_model.wv.index_to_key], axis=0).reshape(1, -1)
+            else:
+                vectors = [np.mean([w2v_model.wv[word] for word in text.split() if word in w2v_model.wv.index_to_key], axis=0) for text in processed_texts]
+            return self.classifier.classifier.predict(vectors)
+        else:
+            return self.classifier.classifier.predict(processed_texts)
+
+    def validate(self):
+        text = input("Enter the text for validation: ")
+        prediction = self.predict_sentiment(text)
+        print(f"The predicted sentiment for the given text is: {prediction}")
+
