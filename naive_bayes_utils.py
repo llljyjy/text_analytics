@@ -6,7 +6,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.metrics import precision_score, recall_score, f1_score
-from gensim.models import Word2Vec
 import re
 import inflect
 import nltk
@@ -16,15 +15,20 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+import string
 
 from wordcloud import WordCloud, STOPWORDS
+sns.color_palette("Set2")
 
 
 # different types of preprocessor to understand the impact of different text preprocessing techniques
 
 # most basic preprocessor, only converting all to lower cases
 def lowercase_preprocessor(text):
-    return text.lower()
+    if isinstance(text, str):
+        # Convert to lowercase and remove punctuation
+        return ''.join([char for char in text.lower() if char not in string.punctuation])
+    return text
 
 # try out with only common english stopwords
 def stopword_preprocessor(text):
@@ -84,67 +88,43 @@ class NaiveBayesClassifier:
                 text = func(text)
         return text
 
-    # to explore on different types of Vectorizer: count, tfidf, word2vec
-    def build_pipeline(self, vectorizer_type):
+    def build_pipeline(self, vectorizer_type, bi_gram=False):
         if vectorizer_type == 'count':
             vectorizer = CountVectorizer()
+            if bi_gram:
+                vectorizer = CountVectorizer(ngram_range=(1, 2))
         elif vectorizer_type == 'tfidf':
             vectorizer = TfidfVectorizer()
-        elif vectorizer_type == 'word2vec':
-            vectorizer = None  # Word2Vec do not go through pipeline
         else:
             raise ValueError(f"Unknown vectorizer type: {vectorizer_type}")
-        
+
         classifier = MultinomialNB()
-        
-        if vectorizer_type == 'word2vec':
-            return classifier # Word2Vec do not go through pipeline
-        else:
-            return Pipeline([
-                ('vectorizer', vectorizer),
-                ('classifier', classifier)
-            ])
 
-    def train_word2vec(self):
-        w2v_model = Word2Vec(self.data['reviews_processed'].str.split(), vector_size=100, window=5, min_count=1, workers=4)
-        w2v_model.train(self.data['reviews_processed'].tolist(), total_examples=w2v_model.corpus_count, epochs=10)
-        # Average the word vectors for each sentence
-        self.data['w2v'] = self.data['reviews_processed'].apply(lambda x: np.mean([w2v_model.wv[word] for word in x.split() if word in w2v_model.wv.index_to_key], axis=0))
-        return list(self.data['w2v'].values)
+        return Pipeline([
+            ('vectorizer', vectorizer),
+            ('classifier', classifier)
+        ])
 
-    def train(self, vectorizer_type='count', use_additional_features=False):
+    def train(self, vectorizer_type='count', use_additional_features=False, bi_gram=False):
         # Preprocessing
         self.data['reviews_processed'] = self.data[self.text_col].apply(self.apply_preprocessors)
 
-        if vectorizer_type == 'word2vec':
-            X = self.train_word2vec()
-        else:
-            X = self.data['reviews_processed']
-
-        # If using additional features
         if use_additional_features:
-            additional_features = self.data[['helpfulness', 'price_usd', 'length']]  
-            if vectorizer_type != 'word2vec':
-                vectorizer = CountVectorizer() if vectorizer_type == 'count' else TfidfVectorizer()
-                X = vectorizer.fit_transform(X).toarray()
-            # Concatenate the vectorized text data with the additional features
-            X = np.hstack((X, additional_features))
-
-        X_train, X_test, y_train, y_test = train_test_split(X, self.data['true_sentiment'], test_size=0.4, random_state=2023)
-    
-        if vectorizer_type != 'word2vec':
-            pipeline = self.build_pipeline(vectorizer_type)
-            pipeline.fit(X_train, y_train)
-            self.classifier = pipeline
-
+            X = self.data[['reviews_processed', 'helpfulness', 'price_usd', 'length']]
         else:
-            # If using Word2Vec, train the classifier directly
-            self.classifier = MultinomialNB()
-            self.classifier.fit(X_train, y_train)
+            X = self.data[['reviews_processed']]
 
-        train_metrics = self.evaluate_classifier(self.classifier, X_train, y_train)
-        test_metrics = self.evaluate_classifier(self.classifier, X_test, y_test)
+        y = self.data['true_sentiment']
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=2023)
+        
+        pipeline = self.build_pipeline(vectorizer_type)
+        pipeline.fit(X_train['reviews_processed'], y_train) # We only vectorize the text data
+        self.classifier = pipeline
 
+        train_metrics = self.evaluate_classifier(self.classifier, X_train['reviews_processed'], y_train)
+        test_metrics = self.evaluate_classifier(self.classifier, X_test['reviews_processed'], y_test)
+        
         return train_metrics, test_metrics
 
 
@@ -242,7 +222,7 @@ class NaiveBayesVisualization:
                     print(f"Predicted Sentiment: {row['prediction']}\n")
 
     def show_top_features(self, n_features=10):
-        output_str = "x"
+        # output_str = "x"
 
         if 'count' in self.classifier.classifier.named_steps or 'tfidf' in self.classifier.classifier.named_steps:
             if 'count' in self.classifier.classifier.named_steps:
@@ -277,25 +257,17 @@ class Validator:
 
     def predict_single(self, text):
         processed_text = self.preprocess_text(text)
-        return self._predict(processed_text)
+        # return self._predict(processed_text)
+        return self._predict([processed_text])[0]
 
     def predict_batch(self, texts):
         processed_texts = [self.preprocess_text(text) for text in texts]
         return self._predict(processed_texts)
 
     def _predict(self, processed_texts):
-        if 'w2v' in self.classifier.data.columns:
-            w2v_model = Word2Vec.load("word2vec.model")
-            if isinstance(processed_texts, str):
-                vectors = np.mean([w2v_model.wv[word] for word in processed_texts.split() if word in w2v_model.wv.index_to_key], axis=0).reshape(1, -1)
-            else:
-                vectors = [np.mean([w2v_model.wv[word] for word in text.split() if word in w2v_model.wv.index_to_key], axis=0) for text in processed_texts]
-            return self.classifier.classifier.predict(vectors)
-        else:
-            return self.classifier.classifier.predict(processed_texts)
+        return self.classifier.classifier.predict(processed_texts)
 
     def validate(self):
         text = input("Enter the text for validation: ")
         prediction = self.predict_sentiment(text)
         print(f"The predicted sentiment for the given text is: {prediction}")
-
