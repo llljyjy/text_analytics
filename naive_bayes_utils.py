@@ -15,8 +15,10 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+import string
 
 from wordcloud import WordCloud, STOPWORDS
+sns.color_palette("Set2")
 
 
 # different types of preprocessor to understand the impact of different text preprocessing techniques
@@ -24,7 +26,8 @@ from wordcloud import WordCloud, STOPWORDS
 # most basic preprocessor, only converting all to lower cases
 def lowercase_preprocessor(text):
     if isinstance(text, str):
-        return text.lower()
+        # Convert to lowercase and remove punctuation
+        return ''.join([char for char in text.lower() if char not in string.punctuation])
     return text
 
 # try out with only common english stopwords
@@ -85,9 +88,11 @@ class NaiveBayesClassifier:
                 text = func(text)
         return text
 
-    def build_pipeline(self, vectorizer_type):
+    def build_pipeline(self, vectorizer_type, bi_gram=False):
         if vectorizer_type == 'count':
             vectorizer = CountVectorizer()
+            if bi_gram:
+                vectorizer = CountVectorizer(ngram_range=(1, 2))
         elif vectorizer_type == 'tfidf':
             vectorizer = TfidfVectorizer()
         else:
@@ -100,7 +105,7 @@ class NaiveBayesClassifier:
             ('classifier', classifier)
         ])
 
-    def train(self, vectorizer_type='count', use_additional_features=False):
+    def train(self, vectorizer_type='count', use_additional_features=False, bi_gram=False):
         # Preprocessing
         self.data['reviews_processed'] = self.data[self.text_col].apply(self.apply_preprocessors)
 
@@ -217,7 +222,7 @@ class NaiveBayesVisualization:
                     print(f"Predicted Sentiment: {row['prediction']}\n")
 
     def show_top_features(self, n_features=10):
-        output_str = "x"
+        # output_str = "x"
 
         if 'count' in self.classifier.classifier.named_steps or 'tfidf' in self.classifier.classifier.named_steps:
             if 'count' in self.classifier.classifier.named_steps:
@@ -252,7 +257,8 @@ class Validator:
 
     def predict_single(self, text):
         processed_text = self.preprocess_text(text)
-        return self._predict(processed_text)
+        # return self._predict(processed_text)
+        return self._predict([processed_text])[0]
 
     def predict_batch(self, texts):
         processed_texts = [self.preprocess_text(text) for text in texts]
@@ -265,4 +271,3 @@ class Validator:
         text = input("Enter the text for validation: ")
         prediction = self.predict_sentiment(text)
         print(f"The predicted sentiment for the given text is: {prediction}")
-
