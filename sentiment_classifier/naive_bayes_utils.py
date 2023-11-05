@@ -261,14 +261,31 @@ class Validator:
         # return self._predict(processed_text)
         return self._predict([processed_text])[0]
 
+    def predict_single_proba(self, text):
+        processed_text = self.preprocess_text(text)
+        return self._predict_proba([processed_text])[0]
+
     def predict_batch(self, texts):
         processed_texts = [self.preprocess_text(text) for text in texts]
         return self._predict(processed_texts)
 
+    def predict_batch_proba(self, texts):
+        processed_texts = [self.preprocess_text(text) for text in texts]
+        return self._predict_proba(processed_texts)
+
     def _predict(self, processed_texts):
         return self.classifier.classifier.predict(processed_texts)
 
+    def _predict_proba(self, processed_texts):
+        # This assumes the underlying classifier has a 'predict_proba' method
+        return self.classifier.classifier.predict_proba(processed_texts)[:, 1]  # Assuming you want positive class probabilities
+
     def validate(self):
         text = input("Enter the text for validation: ")
-        prediction = self.predict_sentiment(text)
+        prediction = self.predict_single(text)
         print(f"The predicted sentiment for the given text is: {prediction}")
+
+    def validate_proba(self):
+        text = input("Enter the text for validation: ")
+        probability = self.predict_single_proba(text)
+        print(f"The predicted probability for positive sentiment for the given text is: {probability}")
