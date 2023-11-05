@@ -4,7 +4,9 @@
 
 This repository encompasses various methods for sentiment analysis. The definitions and functions related to the models are stored separately in `naive_bayes_utils.py` and are imported for easier code maintenance and readability.
 
-You can play around with the code in `sentiment_training.ipynb`
+model is trained with `sentiment_training.ipynb` 
+
+you can play around with the final model with `sentiment_playground.ipynb` 
 
 ---
 
