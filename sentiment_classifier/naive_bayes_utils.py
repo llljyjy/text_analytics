@@ -1,4 +1,5 @@
 # naive_bayes_utils.py
+# jy 2023-10
 
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
