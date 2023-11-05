@@ -4,12 +4,7 @@
 
 This repository encompasses various methods for sentiment analysis. The definitions and functions related to the models are stored separately in `naive_bayes_utils.py` and are imported for easier code maintenance and readability.
 
-## 📋 Table of Contents
-- [Model Training Baseline](#model-training-baseline)
-- [Advanced EDA and Model Improvement](#advanced-eda-and-model-improvement)
-- [Validation](#validation)
-- [Combined Model](#combined-model)
-- [Tuneable Parameters](#tuneable-parameters)
+You can play around with the code in `sentiment_training.ipynb`
 
 ---
 
