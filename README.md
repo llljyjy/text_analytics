@@ -20,4 +20,4 @@ Several methods were trialed and tested for each step and the more accurate mode
 
 ## App Prototype
 The pride of our project: an app created on streamlit which is able to apply our working models on reviews in real time!
-Try it at: 
+Try it at: https://app-sephora-f6vnysws6thqx2mrd5yc2v.streamlit.app/Master_Dashboard
