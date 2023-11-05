@@ -12,10 +12,6 @@ You can play around with the code in `sentiment_training.ipynb`
 
 We start with a baseline model trained on a Naive Bayes classifier.
 
-```python
-# Code snippet related to the baseline model can be added here, if needed
-```
-
 ## 🔍 Advanced EDA and Model Improvement
 
 Several text treatment techniques have been explored to gauge their effectiveness.
